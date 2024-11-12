@@ -1,0 +1,48 @@
+# Usa una slim base image per ridurre le dimensioni
+FROM --platform=linux/arm/v7 python:3.11-slim-bullseye
+
+# Imposta le variabili d'ambiente
+ENV LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8 \
+    PYTHONUNBUFFERED=1
+
+# Crea un utente non root
+RUN useradd -m -s /bin/bash appuser
+
+# Installa le dipendenze di sistema e Docker CLI
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    gnupg-agent \
+    software-properties-common \
+    lsb-release && \
+    # Aggiungi repository Docker
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    # Installa Docker CLI
+    apt-get update && \
+    apt-get install --no-install-recommends -y docker-ce-cli && \
+    # Pulizia
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Installa le dipendenze Python
+RUN pip install --no-cache-dir paho-mqtt
+
+# Crea la struttura della directory dell'app
+WORKDIR /app
+
+# Copia il codice sorgente
+COPY src/docker2mqttenh.py /app/
+RUN chown -R appuser:appuser /app && \
+    chmod +x /app/docker2mqttenh.py
+
+# Passa all'utente non root
+USER appuser
+
+# Imposta l'entrypoint
+ENTRYPOINT ["python3", "/app/docker2mqttenh.py"]
