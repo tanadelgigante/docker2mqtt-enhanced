@@ -6,9 +6,6 @@ ENV LC_ALL=C.UTF-8 \
     LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1
 
-# Crea un utente non root
-RUN useradd -m -s /bin/bash appuser
-
 # Installa le dipendenze di sistema e Docker CLI
 RUN apt-get update && \
     apt-get install --no-install-recommends -y \
@@ -21,10 +18,6 @@ RUN apt-get update && \
     lsb-release && \
     # Scarica e installa Docker CLI
     curl -sSL https://download.docker.com/linux/static/stable/armhf/docker-20.10.9.tgz | tar xzvf - --strip 1 -C /usr/bin docker/docker && \
-    # Grant appuser access to the Docker socket
-    mkdir -p /var/run/docker && \
-    chown -R appuser:appuser /var/run/docker && \
-    chmod 666 /var/run/docker.sock && \
     # Pulizia
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -37,11 +30,7 @@ WORKDIR /app
 
 # Copia il codice sorgente
 COPY src/docker2mqttenh.py /app/
-RUN chown -R appuser:appuser /app && \
-    chmod +x /app/docker2mqttenh.py
-
-# Passa all'utente non root
-USER appuser
+RUN chmod +x /app/docker2mqttenh.py
 
 # Imposta l'entrypoint
 ENTRYPOINT ["python3", "/app/docker2mqttenh.py"]
