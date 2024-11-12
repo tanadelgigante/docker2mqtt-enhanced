@@ -26,6 +26,12 @@ RUN apt-get update && \
     # Install Docker CLI
     apt-get update && \
     apt-get install --no-install-recommends -y docker-ce-cli && \
+    # Add appuser to the docker group
+    usermod -aG docker appuser && \
+    # Grant appuser access to the Docker socket
+    mkdir -p /var/run/docker && \
+    chown -R appuser:appuser /var/run/docker && \
+    chmod 666 /var/run/docker.sock && \
     # Clean up
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

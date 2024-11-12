@@ -21,6 +21,12 @@ RUN apt-get update && \
     lsb-release && \
     # Scarica e installa Docker CLI
     curl -sSL https://download.docker.com/linux/static/stable/armhf/docker-20.10.9.tgz | tar xzvf - --strip 1 -C /usr/bin docker/docker && \
+    # Add appuser to the docker group
+    usermod -aG docker appuser && \
+    # Grant appuser access to the Docker socket
+    mkdir -p /var/run/docker && \
+    chown -R appuser:appuser /var/run/docker && \
+    chmod 666 /var/run/docker.sock && \
     # Pulizia
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
