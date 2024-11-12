@@ -34,6 +34,10 @@ docker_events_cmd = ['docker', 'events', '-f', 'type=container', '--format', '{{
 docker_ps_cmd = ['docker', 'ps', '-a', '--format', '{{json .}}']
 invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
+import json
+import datetime
+from subprocess import run, PIPE
+
 def parse_memory_value(mem_str):
     """Convert memory string (e.g., '14.49MiB') to bytes."""
     units = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
@@ -64,25 +68,23 @@ def get_container_metrics(container_id):
         inspect = json.loads(run(inspect_cmd, stdout=PIPE, text=True).stdout)[0]
 
         # Parse CPU stats
-        cpu_percent = float(stats.get('CPUPerc', '0%').rstrip('%'))
-        cpu_cores = len(inspect['HostConfig']['CpusetCpus'].split(',')) if inspect['HostConfig']['CpusetCpus'] else 0
+        cpu_percent = stats.get('CPUPerc', '0%')
+        cpu_cores = str(len(inspect['HostConfig']['CpusetCpus'].split(','))) if inspect['HostConfig']['CpusetCpus'] else '0'
 
         # Parse memory stats
         mem_usage_str = stats.get('MemUsage', '0 / 0').split('/')[0].strip().split()[0]
         mem_limit_str = stats.get('MemUsage', '0 / 0').split('/')[1].strip().split()[0]
-        mem_usage = parse_memory_value(mem_usage_str)
-        mem_limit = parse_memory_value(mem_limit_str)
-        mem_percent = float(stats.get('MemPerc', '0%').rstrip('%'))
+        mem_percent = stats.get('MemPerc', '0%')
 
         # Parse network stats
         net_stats = stats.get('NetIO', '0B / 0B').split(' / ')
-        net_in = float(net_stats[0].rstrip('B'))
-        net_out = float(net_stats[1].rstrip('B'))
+        net_in = net_stats[0].rstrip('B')
+        net_out = net_stats[1].rstrip('B')
 
         # Calculate network speed (requires two measurements)
         # This is simplified - in production you'd want to track previous measurements
-        net_speed_in = 0  # Would need delta calculation
-        net_speed_out = 0  # Would need delta calculation
+        net_speed_in = "0 B/s"  # Would need delta calculation
+        net_speed_out = "0 B/s"  # Would need delta calculation
 
         # Get health status
         health_status = inspect['State'].get('Health', {}).get('Status', 'none')
@@ -97,21 +99,20 @@ def get_container_metrics(container_id):
         return {
             'cpu_percent': cpu_percent,
             'cpu_cores': cpu_cores,
-            'memory_usage': format_size(mem_usage),
-            'memory_limit': format_size(mem_limit),
+            'memory_usage': mem_usage_str,
+            'memory_limit': mem_limit_str,
             'memory_percent': mem_percent,
-            'net_in_total': format_size(net_in),
-            'net_out_total': format_size(net_out),
-            'net_in_speed': format_network_speed(net_speed_in),
-            'net_out_speed': format_network_speed(net_speed_out),
+            'net_in_total': net_in,
+            'net_out_total': net_out,
+            'net_in_speed': net_speed_in,
+            'net_out_speed': net_speed_out,
             'health_status': health_status,
-            'uptime': int(uptime),
+            'uptime': str(int(uptime)) + ' seconds',
             'state': inspect['State']['Status']
         }
     except Exception as e:
         print(f"Error getting metrics for container {container_id}: {e}")
         return {}
-
 
 
 def update_metrics():
