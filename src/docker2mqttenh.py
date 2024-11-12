@@ -34,24 +34,23 @@ docker_events_cmd = ['docker', 'events', '-f', 'type=container', '--format', '{{
 docker_ps_cmd = ['docker', 'ps', '-a', '--format', '{{json .}}']
 invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
+def parse_memory_value(mem_str):
+    """Convert memory string (e.g., '14.49MiB') to bytes."""
+    units = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+    num, unit = mem_str[:-3], mem_str[-3:]
+    return float(num) * units[unit]
 
-def format_size(size_bytes):
-    """Convert bytes to human readable format."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.2f}{unit}"
-        size_bytes /= 1024.0
+def format_size(size):
+    """Format size in bytes to a human-readable format."""
+    for unit in ['B', 'KiB', 'MiB', 'GiB']:
+        if size < 1024.0:
+            return f"{size:.2f}{unit}"
+        size /= 1024.0
+    return f"{size:.2f}TiB"
 
-
-def format_network_speed(bytes_per_sec):
-    """Convert bytes/sec to human readable format."""
-    if bytes_per_sec < 1024:
-        return f"{bytes_per_sec:.2f}B/s"
-    elif bytes_per_sec < 1024 * 1024:
-        return f"{bytes_per_sec/1024:.2f}KB/s"
-    else:
-        return f"{bytes_per_sec/(1024*1024):.2f}MB/s"
-
+def format_network_speed(speed):
+    """Format network speed to a human-readable format."""
+    return f"{speed:.2f} B/s"
 
 def get_container_metrics(container_id):
     """Get detailed metrics for a container."""
@@ -59,44 +58,47 @@ def get_container_metrics(container_id):
         # Get container stats
         stats_cmd = ['docker', 'stats', container_id, '--no-stream', '--format', '{{json .}}']
         stats = json.loads(run(stats_cmd, stdout=PIPE, text=True).stdout)
-        
+
         # Get container inspect info
         inspect_cmd = ['docker', 'inspect', container_id]
         inspect = json.loads(run(inspect_cmd, stdout=PIPE, text=True).stdout)[0]
-        
+
         # Parse CPU stats
         cpu_percent = float(stats.get('CPUPerc', '0%').rstrip('%'))
         cpu_cores = len(inspect['HostConfig']['CpusetCpus'].split(',')) if inspect['HostConfig']['CpusetCpus'] else 0
-        
+
         # Parse memory stats
-        mem_usage = int(stats.get('MemUsage', '0 / 0').split('/')[0].strip().split()[0])
-        mem_limit = int(stats.get('MemUsage', '0 / 0').split('/')[1].strip().split()[0])
+        mem_usage_str = stats.get('MemUsage', '0 / 0').split('/')[0].strip().split()[0]
+        mem_limit_str = stats.get('MemUsage', '0 / 0').split('/')[1].strip().split()[0]
+        mem_usage = parse_memory_value(mem_usage_str)
+        mem_limit = parse_memory_value(mem_limit_str)
         mem_percent = float(stats.get('MemPerc', '0%').rstrip('%'))
-        
+
         # Parse network stats
         net_stats = stats.get('NetIO', '0B / 0B').split(' / ')
         net_in = float(net_stats[0].rstrip('B'))
         net_out = float(net_stats[1].rstrip('B'))
-        
+
         # Calculate network speed (requires two measurements)
         # This is simplified - in production you'd want to track previous measurements
         net_speed_in = 0  # Would need delta calculation
         net_speed_out = 0  # Would need delta calculation
-        
+
         # Get health status
         health_status = inspect['State'].get('Health', {}).get('Status', 'none')
-        
+
         # Get uptime
         started_at = datetime.datetime.strptime(
             inspect['State']['StartedAt'].split('.')[0],
             '%Y-%m-%dT%H:%M:%S'
         )
         uptime = (datetime.datetime.utcnow() - started_at).total_seconds()
-        
+
         return {
             'cpu_percent': cpu_percent,
             'cpu_cores': cpu_cores,
             'memory_usage': format_size(mem_usage),
+            'memory_limit': format_size(mem_limit),
             'memory_percent': mem_percent,
             'net_in_total': format_size(net_in),
             'net_out_total': format_size(net_out),
@@ -109,6 +111,7 @@ def get_container_metrics(container_id):
     except Exception as e:
         print(f"Error getting metrics for container {container_id}: {e}")
         return {}
+
 
 
 def update_metrics():
