@@ -157,12 +157,12 @@ def mqtt_send(topic, payload, retain=False):
 
 
 def register_container(container_entry):
-    """Register a container with Home Assistant and initialize its metrics."""
+    container_name = f"{DOCKER2MQTT_HOSTNAME}_{container_entry['name']}"
     known_containers[container_entry['name']] = container_entry
-    registration_topic = DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', container_entry['name']))
+    registration_topic = DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', container_name))
     registration_packet = {
-        'name': f"{MQTT_TOPIC_PREFIX.title()} {container_entry['name']}",
-        'unique_id': f'{MQTT_TOPIC_PREFIX}_{DOCKER2MQTT_HOSTNAME}_{registration_topic}',
+        'name': f"{MQTT_TOPIC_PREFIX.title()} {container_name}",
+        'unique_id': f'{MQTT_TOPIC_PREFIX}_{container_name}',
         'availability_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status',
         'payload_available': 'online',
         'payload_not_available': 'offline',
@@ -174,7 +174,6 @@ def register_container(container_entry):
         'json_attributes_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
     }
     mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
-    
     # Initialize container with metrics
     try:
         ps_cmd = ['docker', 'ps', '-a', '--filter', f'name=^/{container_entry["name"]}$', '--format', '{{.ID}}']
