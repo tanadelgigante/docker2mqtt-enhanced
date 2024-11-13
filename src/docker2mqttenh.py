@@ -68,13 +68,16 @@ def get_container_metrics(container_id):
         inspect = json.loads(run(inspect_cmd, stdout=PIPE, text=True).stdout)[0]
 
         # Parse CPU stats
-        cpu_percent = stats.get('CPUPerc', '0%')
+        cpu_percent = float(stats.get('CPUPerc', '0%').strip('%'))
+        cpu_percent = f"{cpu_percent:.2f}%"  # Limita a 2 decimali
         cpu_cores = str(len(inspect['HostConfig']['CpusetCpus'].split(','))) if inspect['HostConfig']['CpusetCpus'] else '0'
 
         # Parse memory stats
-        mem_usage_str = stats.get('MemUsage', '0 / 0').split('/')[0].strip().split()[0]
+        mem_usage = parse_memory_value(stats.get('MemUsage', '0 / 0').split('/')[0].strip())
+        formatted_mem_usage = f"{mem_usage:.1f} B" if mem_usage >= 10 else f"{mem_usage:.2f} B"
         mem_limit_str = stats.get('MemUsage', '0 / 0').split('/')[1].strip().split()[0]
-        mem_percent = stats.get('MemPerc', '0%')
+        mem_percent = float(stats.get('MemPerc', '0%').strip('%'))
+        mem_percent = f"{mem_percent:.2f}%"  # Limita a 2 decimali
 
         # Parse network stats
         net_stats = stats.get('NetIO', '0B / 0B').split(' / ')
@@ -90,16 +93,18 @@ def get_container_metrics(container_id):
         health_status = inspect['State'].get('Health', {}).get('Status', 'none')
 
         # Get uptime
+        # Converti l'uptime in formato leggibile
         started_at = datetime.datetime.strptime(
             inspect['State']['StartedAt'].split('.')[0],
             '%Y-%m-%dT%H:%M:%S'
         )
-        uptime = (datetime.datetime.utcnow() - started_at).total_seconds()
+        uptime_seconds = (datetime.datetime.utcnow() - started_at).total_seconds()
+        uptime_human = str(datetime.timedelta(seconds=int(uptime_seconds)))
 
         return {
             'cpu_percent': cpu_percent,
             'cpu_cores': cpu_cores,
-            'memory_usage': mem_usage_str,
+            'memory_usage': formatted_mem_usage,
             'memory_limit': mem_limit_str,
             'memory_percent': mem_percent,
             'net_in_total': net_in,
@@ -107,7 +112,8 @@ def get_container_metrics(container_id):
             'net_in_speed': net_speed_in,
             'net_out_speed': net_speed_out,
             'health_status': health_status,
-            'uptime': str(int(uptime)) + ' seconds',
+            'uptime': str(int(uptime_seconds)),
+            'uptime_h': uptime_human,
             'state': inspect['State']['Status']
         }
     except Exception as e:
