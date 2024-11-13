@@ -15,9 +15,7 @@ services:
     - MQTT_TIMEOUT=30
     - MQTT_TOPIC_PREFIX=docker
     - MQTT_QOS=1
-    - METRICS_UPDATE_INTERVAL=60
+    - METRICS_UPDATE_INTERVAL=10
     restart: always
     volumes:
-    - type: volume
-      source: /var/run/docker.sock
-      target: /var/run/docker.sock
+    - '/var/run/docker.sock:/var/run/docker.sock'

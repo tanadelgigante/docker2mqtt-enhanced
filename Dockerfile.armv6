@@ -1,36 +1,43 @@
-# Usa una slim base image per ridurre le dimensioni
-FROM --platform=linux/arm/v6 python:3.11-slim-bullseye
+# Usa una base image esistente con Docker Compose per ARMv6
+FROM keinos/docker-compose:arm32v6
+
+# Imposta la directory di lavoro all'interno del container
+WORKDIR /app
 
 # Imposta le variabili d'ambiente
 ENV LC_ALL=C.UTF-8 \
     LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1
 
-# Installa le dipendenze di sistema e Docker CLI
-RUN apt-get update && \
-    apt-get install --no-install-recommends -y \
-    apt-transport-https \
+# Installa le dipendenze di sistema
+RUN apk update && \
+    apk add --no-cache \
     ca-certificates \
     curl \
-    gnupg \
-    gnupg-agent \
-    software-properties-common \
-    lsb-release && \
-    # Scarica e installa Docker CLI
-    curl -sSL https://download.docker.com/linux/static/stable/armhf/docker-20.10.9.tgz | tar xzvf - --strip 1 -C /usr/bin docker/docker && \
-    # Pulizia
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    gnupg && \
+    rm -rf /var/cache/apk/*
+
+# Installa Python 3.11 e pip
+RUN apk add --no-cache python3-dev py3-pip && \
+    ln -sf python3 /usr/bin/python && \
+    python3 -m ensurepip && \
+    pip3 install --no-cache --upgrade pip setuptools
 
 # Installa le dipendenze Python
-RUN pip install --no-cache-dir paho-mqtt
+RUN pip install --no-cache-dir flask docker aiohttp gunicorn paho-mqtt
 
 # Crea la struttura della directory dell'app
 WORKDIR /app
 
-# Copia il codice sorgente
+# Copia il contenuto della directory corrente nel container in /app
 COPY src/docker2mqttenh.py /app/
+
+# Rendi lo script eseguibile
 RUN chmod +x /app/docker2mqttenh.py
+
+ARG VERSION
+
+ENV VERSION=${VERSION}
 
 # Imposta l'entrypoint
 ENTRYPOINT ["python3", "/app/docker2mqttenh.py"]

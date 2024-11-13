@@ -3,6 +3,7 @@ import atexit
 import datetime
 import json
 from os import environ
+import paho.mqtt.client
 import queue
 import re
 from socket import gethostname
@@ -10,13 +11,12 @@ from subprocess import run, Popen, PIPE
 from threading import Thread
 from time import sleep, time
 
-import paho.mqtt.client
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24 * 60 * 60))
 HOMEASSISTANT_PREFIX = environ.get('HOMEASSISTANT_PREFIX', 'homeassistant')
 DOCKER2MQTT_HOSTNAME = environ.get('DOCKER2MQTT_HOSTNAME', gethostname())
-MQTT_CLIENT_ID = environ.get('MQTT_CLIENT_ID', 'docker2mqtt')
+MQTT_CLIENT_ID = environ.get('MQTT_CLIENT_ID', 'docker2mqtt-enh')
 MQTT_USER = environ.get('MQTT_USER', '')
 MQTT_PASSWD = environ.get('MQTT_PASSWD', '')
 MQTT_HOST = environ.get('MQTT_HOST', 'localhost')
@@ -34,15 +34,13 @@ docker_events_cmd = ['docker', 'events', '-f', 'type=container', '--format', '{{
 docker_ps_cmd = ['docker', 'ps', '-a', '--format', '{{json .}}']
 invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
-import json
-import datetime
-from subprocess import run, PIPE
 
 def parse_memory_value(mem_str):
     """Convert memory string (e.g., '14.49MiB') to bytes."""
-    units = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+    units = {"B": 1, "KiB": 1024, "MiB": 1024 ** 2, "GiB": 1024 ** 3}
     num, unit = mem_str[:-3], mem_str[-3:]
     return float(num) * units[unit]
+
 
 def format_size(size):
     """Format size in bytes to a human-readable format."""
@@ -52,9 +50,11 @@ def format_size(size):
         size /= 1024.0
     return f"{size:.2f}TiB"
 
+
 def format_network_speed(speed):
     """Format network speed to a human-readable format."""
     return f"{speed:.2f} B/s"
+
 
 def get_container_metrics(container_id):
     """Get detailed metrics for a container."""
@@ -118,7 +118,7 @@ def get_container_metrics(container_id):
 def update_metrics():
     """Update metrics for all known containers periodically."""
     while True:
-        for container_name, container_info in known_containers.copy().items():
+        for container_name in known_containers.copy().items():
             try:
                 # Get container ID using docker ps
                 ps_cmd = ['docker', 'ps', '-a', '--filter', f'name=^/{container_name}$', '--format', '{{.ID}}']
