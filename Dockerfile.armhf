@@ -36,6 +36,6 @@ WORKDIR /app
 # Copia il codice sorgente
 COPY src/docker2mqttenh.py /app/
 RUN chmod +x /app/docker2mqttenh.py
-
+ 
 # Imposta l'entrypoint
 ENTRYPOINT ["python3", "/app/docker2mqttenh.py"]
