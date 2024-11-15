@@ -12,9 +12,13 @@ RUN apt-get update && \
     apt-transport-https \
     ca-certificates \
     curl \
-    gcc \
-    gnupg && \
-    rm -rf /var/cache/apk/*
+    gnupg \
+    gnupg-agent \
+    software-properties-common \
+    lsb-release \
+    python3-pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Installa Docker CLI usando il metodo di installazione conveniente
 RUN curl -fsSL https://get.docker.com | sh
