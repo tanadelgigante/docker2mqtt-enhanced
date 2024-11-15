@@ -1,8 +1,5 @@
-# Usa una base image esistente con Docker Compose per ARMv6
-FROM keinos/docker-compose:arm32v6
-
-# Imposta la directory di lavoro all'interno del container
-WORKDIR /app
+# Usa una base image di Raspbian compatibile con ARMv6
+FROM balenalib/rpi-raspbian:bullseye
 
 # Imposta le variabili d'ambiente
 ENV LC_ALL=C.UTF-8 \
@@ -10,34 +7,31 @@ ENV LC_ALL=C.UTF-8 \
     PYTHONUNBUFFERED=1
 
 # Installa le dipendenze di sistema
-RUN apk update && \
-    apk add --no-cache \
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y \
+    apt-transport-https \
     ca-certificates \
     curl \
-    gnupg && \
-    rm -rf /var/cache/apk/*
+    gnupg \
+    gnupg-agent \
+    software-properties-common \
+    lsb-release \
+    python3-pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Installa Python 3.11 e pip
-RUN apk add --no-cache python3-dev py3-pip && \
-    ln -sf python3 /usr/bin/python && \
-    python3 -m ensurepip && \
-    pip3 install --no-cache --upgrade pip setuptools
+# Installa Docker CLI usando il metodo di installazione conveniente
+RUN curl -fsSL https://get.docker.com | sh
 
 # Installa le dipendenze Python
-RUN pip install --no-cache-dir flask docker aiohttp gunicorn paho-mqtt
+RUN pip3 install --no-cache-dir paho-mqtt
 
 # Crea la struttura della directory dell'app
 WORKDIR /app
 
-# Copia il contenuto della directory corrente nel container in /app
+# Copia il codice sorgente
 COPY src/docker2mqttenh.py /app/
-
-# Rendi lo script eseguibile
 RUN chmod +x /app/docker2mqttenh.py
-
-ARG VERSION
-
-ENV VERSION=${VERSION}
 
 # Imposta l'entrypoint
 ENTRYPOINT ["python3", "/app/docker2mqttenh.py"]
