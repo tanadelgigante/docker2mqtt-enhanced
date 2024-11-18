@@ -1,24 +1,16 @@
-FROM arm32v6/debian:bullseye-slim
+FROM arm32v6/python:3.9-alpine
 
-ENV LC_ALL=C.UTF-8 \
-    LANG=C.UTF-8 \
-    PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && \
-    apt-get install --no-install-recommends -y \
-    python3-pip \
+# Installa dipendenze necessarie
+RUN apk add --no-cache \
+    docker-cli \
     curl \
     ca-certificates \
-    gnupg \
-    lsb-release && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Installa Docker CLI
-RUN curl -fsSL https://get.docker.com | sh
+    gnupg
 
 # Installa paho-mqtt
-RUN pip3 install --no-cache-dir paho-mqtt
+RUN pip install --no-cache-dir paho-mqtt
 
 WORKDIR /app
 COPY src/docker2mqttenh.py /app/
