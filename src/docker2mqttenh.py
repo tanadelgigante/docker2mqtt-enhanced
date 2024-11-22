@@ -180,11 +180,6 @@ def mqtt_send(topic, payload, retain=False):
         if DEBUG:
             print(f'Sending to MQTT: {topic}: {payload}')
         result = mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
-        if not result.is_published():
-            print("Failed to publish message, attempting to reconnect...")
-            mqtt_connect_with_retry(mqtt)
-            # Retry the publish after reconnection
-            mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
     except Exception as e:
         print(f'MQTT Publish Failed: {e}')
         print("Attempting to reconnect...")
