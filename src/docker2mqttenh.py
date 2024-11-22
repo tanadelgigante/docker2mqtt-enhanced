@@ -27,6 +27,7 @@ MQTT_QOS = int(environ.get('MQTT_QOS', 1))
 METRICS_UPDATE_INTERVAL = int(environ.get('METRICS_UPDATE_INTERVAL', '30'))  # seconds
 DISCOVERY_TOPIC = f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
+MQTT_RECONNECT_DELAY = 300  # 5 minutes in seconds
 
 known_containers = {}
 pending_destroy_operations = {}
@@ -153,13 +154,46 @@ def mqtt_disconnect():
     mqtt.loop_stop()
 
 
+def on_disconnect(client, userdata, rc):
+    """Callback for when the client disconnects from the MQTT broker."""
+    print(f"Disconnected from MQTT broker with code: {rc}")
+    if rc != 0:
+        print("Unexpected disconnection. Will attempt to reconnect...")
+
+def mqtt_connect_with_retry(mqtt_client):
+    """Attempts to connect to MQTT broker with retry mechanism."""
+    connected = False
+    while not connected:
+        try:
+            mqtt_client.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
+            connected = True
+            print("Successfully connected to MQTT broker")
+            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'online', retain=True)
+        except Exception as e:
+            print(f"Failed to connect to MQTT broker: {e}")
+            print(f"Retrying in {MQTT_RECONNECT_DELAY} seconds...")
+            sleep(MQTT_RECONNECT_DELAY)
+
 def mqtt_send(topic, payload, retain=False):
+    """Send message to MQTT broker with reconnection handling."""
     try:
         if DEBUG:
             print(f'Sending to MQTT: {topic}: {payload}')
-        mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
+        result = mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
+        if not result.is_published():
+            print("Failed to publish message, attempting to reconnect...")
+            mqtt_connect_with_retry(mqtt)
+            # Retry the publish after reconnection
+            mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
     except Exception as e:
         print(f'MQTT Publish Failed: {e}')
+        print("Attempting to reconnect...")
+        mqtt_connect_with_retry(mqtt)
+        # Retry the publish after reconnection
+        try:
+            mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
+        except Exception as e:
+            print(f'MQTT Publish Failed after reconnection attempt: {e}')
 
 
 def register_container(container_entry):
@@ -209,8 +243,12 @@ if __name__ == '__main__':
     mqtt = paho.mqtt.client.Client()
     mqtt.username_pw_set(username=MQTT_USER, password=MQTT_PASSWD)
     mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
-    mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
+    mqtt.on_disconnect = on_disconnect
+    
+    # Initial connection with retry
+    mqtt_connect_with_retry(mqtt)
     mqtt.loop_start()
+    
     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'online', retain=True)
 
     # Register containers with HA
