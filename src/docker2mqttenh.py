@@ -3,7 +3,6 @@ import atexit
 import datetime
 import json
 from os import environ
-import paho.mqtt.client
 import queue
 import re
 from socket import gethostname
@@ -11,6 +10,7 @@ from subprocess import run, Popen, PIPE
 from threading import Thread
 from time import sleep, time
 
+import paho.mqtt.client
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24 * 60 * 60))
@@ -154,11 +154,12 @@ def mqtt_disconnect():
     mqtt.loop_stop()
 
 
-def on_disconnect(client, userdata, rc):
+def on_disconnect(client, userdata, rc, properties=None):
     """Callback for when the client disconnects from the MQTT broker."""
     print(f"Disconnected from MQTT broker with code: {rc}")
     if rc != 0:
         print("Unexpected disconnection. Will attempt to reconnect...")
+
 
 def mqtt_connect_with_retry(mqtt_client):
     """Attempts to connect to MQTT broker with retry mechanism."""
@@ -174,12 +175,13 @@ def mqtt_connect_with_retry(mqtt_client):
             print(f"Retrying in {MQTT_RECONNECT_DELAY} seconds...")
             sleep(MQTT_RECONNECT_DELAY)
 
+
 def mqtt_send(topic, payload, retain=False):
     """Send message to MQTT broker with reconnection handling."""
     try:
         if DEBUG:
             print(f'Sending to MQTT: {topic}: {payload}')
-        result = mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
+        mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
     except Exception as e:
         print(f'MQTT Publish Failed: {e}')
         print("Attempting to reconnect...")
@@ -235,7 +237,7 @@ def readline_thread():
 
 if __name__ == '__main__':
     # Setup MQTT
-    mqtt = paho.mqtt.client.Client()
+    mqtt = paho.mqtt.client.Client(client_id=MQTT_CLIENT_ID, protocol=paho.mqtt.client.MQTTv5)   
     mqtt.username_pw_set(username=MQTT_USER, password=MQTT_PASSWD)
     mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
     mqtt.on_disconnect = on_disconnect
